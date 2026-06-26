@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Traffic Congestion Prediction{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Page Header -->
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-tachometer-alt me-2"></i>Traffic Dashboard
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="refreshDashboard()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="exportData()">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Total Locations</h6>
+                        <h3 class="mb-0" id="total-locations">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-map-marker-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Low Congestion</h6>
+                        <h3 class="mb-0" id="low-congestion">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Medium Congestion</h6>
+                        <h3 class="mb-0" id="medium-congestion">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">High Congestion</h6>
+                        <h3 class="mb-0" id="high-congestion">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-times-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Traffic Trends (24 Hours)
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="trafficTrendsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Congestion Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="congestionPieChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Data Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>Recent Traffic Data
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="trafficTable">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Timestamp</th>
+                                <th>Vehicles</th>
+                                <th>Speed (km/h)</th>
+                                <th>Congestion</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trafficTableBody">
+                            <!-- Data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" style="background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let trafficTrendsChart, congestionPieChart;
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    initializeCharts();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadDashboardData, 30000);
+});
+
+function loadDashboardData() {
+    showLoading();
+    
+    fetch('/api/dashboard-data')
+        .then(response => response.json())
+        .then(data => {
+            updateSummaryCards(data.summary);
+            updateTrafficTable(data.traffic_data);
+            updateCharts(data);
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Error loading dashboard data:', error);
+            hideLoading();
+        });
+}
+
+function updateSummaryCards(summary) {
+    document.getElementById('total-locations').textContent = summary.total_locations || 0;
+    document.getElementById('low-congestion').textContent = summary.low_congestion || 0;
+    document.getElementById('medium-congestion').textContent = summary.medium_congestion || 0;
+    document.getElementById('high-congestion').textContent = summary.high_congestion || 0;
+}
+
+function updateTrafficTable(trafficData) {
+    const tbody = document.getElementById('trafficTableBody');
+    tbody.innerHTML = '';
+    
+    trafficData.slice(0, 10).forEach(data => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${data.location_id}</td>
+            <td>${new Date(data.timestamp).toLocaleString()}</td>
+            <td>${data.vehicle_count}</td>
+            <td>${data.average_speed.toFixed(1)}</td>
+            <td><span class="badge bg-${getCongestionColor(data.congestion_level)}">${data.congestion_level}</span></td>
+            <td>${data.data_source}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getCongestionColor(level) {
+    switch(level) {
+        case 'low': return 'success';
+        case 'medium': return 'warning';
+        case 'high': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function initializeCharts() {
+    // Traffic Trends Chart
+    const trendsCtx = document.getElementById('trafficTrendsChart').getContext('2d');
+    trafficTrendsChart = new Chart(trendsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Vehicle Count',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }, {
+                label: 'Average Speed',
+                data: [],
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Congestion Pie Chart
+    const pieCtx = document.getElementById('congestionPieChart').getContext('2d');
+    congestionPieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Low', 'Medium', 'High'],
+            datasets: [{
+                data: [0, 0, 0],
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function updateCharts(data) {
+    // Update trends chart with traffic trends data
+    fetch('/api/traffic-trends')
+        .then(response => response.json())
+        .then(trendsData => {
+            const labels = trendsData.trends.map(t => new Date(t.hour).toLocaleTimeString());
+            const vehicleData = trendsData.trends.map(t => t.avg_vehicles);
+            const speedData = trendsData.trends.map(t => t.avg_speed);
+            
+            trafficTrendsChart.data.labels = labels;
+            trafficTrendsChart.data.datasets[0].data = vehicleData;
+            trafficTrendsChart.data.datasets[1].data = speedData;
+            trafficTrendsChart.update();
+        });
+    
+    // Update pie chart
+    const summary = data.summary;
+    congestionPieChart.data.datasets[0].data = [
+        summary.low_congestion || 0,
+        summary.medium_congestion || 0,
+        summary.high_congestion || 0
+    ];
+    congestionPieChart.update();
+}
+
+function refreshDashboard() {
+    loadDashboardData();
+}
+
+function exportData() {
+    // Implement data export functionality
+    alert('Export functionality will be implemented');
+}
+
+function showLoading() {
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.add('d-none');
+}
+</script>
+{% endblock %}

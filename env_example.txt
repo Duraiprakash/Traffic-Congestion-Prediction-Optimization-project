@@ -1,0 +1,26 @@
+# Flask Configuration
+SECRET_KEY=your-secret-key-here
+FLASK_ENV=development
+FLASK_DEBUG=True
+
+# Database Configuration
+DATABASE_URL=sqlite:///traffic_data.db
+
+# API Keys
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+OPENWEATHER_API_KEY=your-openweather-api-key
+
+# IoT Configuration
+MQTT_BROKER=localhost
+MQTT_PORT=1883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+
+# Model Configuration
+YOLO_MODEL_PATH=ml_models/vehicle_detection/yolov8n.pt
+LSTM_MODEL_PATH=ml_models/traffic_prediction/lstm_model.h5
+
+# Data Paths
+DATA_DIR=data
+RAW_DATA_DIR=data/raw
+PROCESSED_DATA_DIR=data/processed

@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Traffic Predictions - Traffic Congestion Prediction{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-chart-line me-2"></i>Traffic Predictions
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="generatePredictions()">
+                    <i class="fas fa-magic me-1"></i>Generate Predictions
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="exportPredictions()">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Controls -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Prediction Parameters</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="predictionHorizon" class="form-label">Prediction Horizon (minutes)</label>
+                        <select class="form-select" id="predictionHorizon">
+                            <option value="30">30 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="120">2 hours</option>
+                            <option value="240">4 hours</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="selectedLocations" class="form-label">Locations</label>
+                        <select class="form-select" id="selectedLocations" multiple>
+                            <option value="all" selected>All Locations</option>
+                            <option value="location1">Location 1</option>
+                            <option value="location2">Location 2</option>
+                            <option value="location3">Location 3</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="modelVersion" class="form-label">Model Version</label>
+                        <select class="form-select" id="modelVersion">
+                            <option value="v1.0" selected>LSTM v1.0</option>
+                            <option value="v2.0">Random Forest v2.0</option>
+                            <option value="ensemble">Ensemble Model</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Results -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Prediction Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="predictionsTable">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Predicted Congestion</th>
+                                <th>Confidence</th>
+                                <th>Horizon</th>
+                                <th>Model</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="predictionsTableBody">
+                            <!-- Predictions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Charts -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Prediction Timeline</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="predictionChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Model Performance</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="modelPerformanceChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let predictionChart, modelPerformanceChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    loadRecentPredictions();
+});
+
+function initializeCharts() {
+    // Prediction Timeline Chart
+    const predictionCtx = document.getElementById('predictionChart').getContext('2d');
+    predictionChart = new Chart(predictionCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Predicted Congestion',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1
+                }
+            }
+        }
+    });
+    
+    // Model Performance Chart
+    const performanceCtx = document.getElementById('modelPerformanceChart').getContext('2d');
+    modelPerformanceChart = new Chart(performanceCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Accurate', 'Inaccurate'],
+            datasets: [{
+                data: [85, 15],
+                backgroundColor: ['#28a745', '#dc3545'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function generatePredictions() {
+    const horizon = document.getElementById('predictionHorizon').value;
+    const locations = document.getElementById('selectedLocations').value;
+    const model = document.getElementById('modelVersion').value;
+    
+    const requestData = {
+        locations: locations === 'all' ? [] : locations,
+        horizon: parseInt(horizon),
+        model_version: model
+    };
+    
+    fetch('/api/prediction/forecast', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        updatePredictionsTable(data.predictions);
+        updatePredictionChart(data.predictions);
+    })
+    .catch(error => {
+        console.error('Error generating predictions:', error);
+        alert('Error generating predictions. Please try again.');
+    });
+}
+
+function loadRecentPredictions() {
+    // Load recent predictions from the database
+    fetch('/api/dashboard-data')
+        .then(response => response.json())
+        .then(data => {
+            if (data.predictions) {
+                updatePredictionsTable(data.predictions);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading recent predictions:', error);
+        });
+}
+
+function updatePredictionsTable(predictions) {
+    const tbody = document.getElementById('predictionsTableBody');
+    tbody.innerHTML = '';
+    
+    predictions.forEach(prediction => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${prediction.location_id}</td>
+            <td><span class="badge bg-${getCongestionBootstrapColor(prediction.predicted_congestion)}">${prediction.predicted_congestion}</span></td>
+            <td>${(prediction.confidence_score * 100).toFixed(1)}%</td>
+            <td>${prediction.horizon_minutes} min</td>
+            <td>${prediction.model_version}</td>
+            <td>${new Date(prediction.timestamp).toLocaleString()}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function updatePredictionChart(predictions) {
+    const labels = predictions.map(p => p.location_id);
+    const data = predictions.map(p => {
+        const congestionValues = {'low': 0.2, 'medium': 0.5, 'high': 0.8};
+        return congestionValues[p.predicted_congestion] || 0.5;
+    });
+    
+    predictionChart.data.labels = labels;
+    predictionChart.data.datasets[0].data = data;
+    predictionChart.update();
+}
+
+function getCongestionBootstrapColor(level) {
+    switch(level) {
+        case 'low': return 'success';
+        case 'medium': return 'warning';
+        case 'high': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function exportPredictions() {
+    // Implement prediction export functionality
+    alert('Export functionality will be implemented');
+}
+</script>
+{% endblock %}

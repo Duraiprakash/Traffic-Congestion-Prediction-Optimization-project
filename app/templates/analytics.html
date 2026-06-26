@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Traffic Analytics - Traffic Congestion Prediction{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-chart-bar me-2"></i>Traffic Analytics
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="refreshAnalytics()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="exportAnalytics()">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Analytics Filters</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="timeRange" class="form-label">Time Range</label>
+                        <select class="form-select" id="timeRange" onchange="updateAnalytics()">
+                            <option value="1">Last Hour</option>
+                            <option value="24" selected>Last 24 Hours</option>
+                            <option value="168">Last Week</option>
+                            <option value="720">Last Month</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="locationFilter" class="form-label">Location</label>
+                        <select class="form-select" id="locationFilter" onchange="updateAnalytics()">
+                            <option value="all" selected>All Locations</option>
+                            <option value="location1">Location 1</option>
+                            <option value="location2">Location 2</option>
+                            <option value="location3">Location 3</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="metricType" class="form-label">Metric</label>
+                        <select class="form-select" id="metricType" onchange="updateAnalytics()">
+                            <option value="congestion" selected>Congestion Level</option>
+                            <option value="vehicles">Vehicle Count</option>
+                            <option value="speed">Average Speed</option>
+                            <option value="predictions">Predictions</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="chartType" class="form-label">Chart Type</label>
+                        <select class="form-select" id="chartType" onchange="updateAnalytics()">
+                            <option value="line" selected>Line Chart</option>
+                            <option value="bar">Bar Chart</option>
+                            <option value="area">Area Chart</option>
+                            <option value="scatter">Scatter Plot</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Average Congestion</h6>
+                        <h3 class="mb-0" id="avgCongestion">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-percentage fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Peak Hours</h6>
+                        <h3 class="mb-0" id="peakHours">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Data Points</h6>
+                        <h3 class="mb-0" id="dataPoints">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-database fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Accuracy</h6>
+                        <h3 class="mb-0" id="modelAccuracy">-</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-bullseye fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Analytics Chart -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Traffic Analytics Chart</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="analyticsChart" height="400"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Analytics -->
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Congestion Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="congestionDistributionChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Hourly Patterns</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="hourlyPatternsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Traffic Insights -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Traffic Insights</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="insightsContainer">
+                    <!-- Insights will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let analyticsChart, congestionDistributionChart, hourlyPatternsChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    loadAnalytics();
+});
+
+function initializeCharts() {
+    // Main Analytics Chart
+    const analyticsCtx = document.getElementById('analyticsChart').getContext('2d');
+    analyticsChart = new Chart(analyticsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Congestion Level',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1
+                }
+            }
+        }
+    });
+    
+    // Congestion Distribution Chart
+    const distributionCtx = document.getElementById('congestionDistributionChart').getContext('2d');
+    congestionDistributionChart = new Chart(distributionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Low', 'Medium', 'High'],
+            datasets: [{
+                data: [40, 35, 25],
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Hourly Patterns Chart
+    const hourlyCtx = document.getElementById('hourlyPatternsChart').getContext('2d');
+    hourlyPatternsChart = new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => i + ':00'),
+            datasets: [{
+                label: 'Average Congestion',
+                data: Array.from({length: 24}, () => Math.random()),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1
+                }
+            }
+        }
+    });
+}
+
+function loadAnalytics() {
+    const timeRange = document.getElementById('timeRange').value;
+    const location = document.getElementById('locationFilter').value;
+    const metric = document.getElementById('metricType').value;
+    
+    // Simulate loading analytics data
+    const analyticsData = generateAnalyticsData(timeRange, location, metric);
+    
+    updateKeyMetrics(analyticsData);
+    updateMainChart(analyticsData);
+    updateInsights(analyticsData);
+}
+
+function generateAnalyticsData(timeRange, location, metric) {
+    // Generate sample analytics data
+    const hours = parseInt(timeRange);
+    const dataPoints = Math.min(hours, 24);
+    
+    const labels = [];
+    const data = [];
+    
+    for (let i = 0; i < dataPoints; i++) {
+        const hour = new Date(Date.now() - (dataPoints - i) * 60 * 60 * 1000);
+        labels.push(hour.toLocaleTimeString());
+        data.push(Math.random());
+    }
+    
+    return {
+        labels: labels,
+        data: data,
+        avgCongestion: (data.reduce((a, b) => a + b, 0) / data.length * 100).toFixed(1),
+        peakHours: Math.floor(Math.random() * 24),
+        dataPoints: dataPoints,
+        modelAccuracy: (85 + Math.random() * 10).toFixed(1)
+    };
+}
+
+function updateKeyMetrics(data) {
+    document.getElementById('avgCongestion').textContent = data.avgCongestion + '%';
+    document.getElementById('peakHours').textContent = data.peakHours + ':00';
+    document.getElementById('dataPoints').textContent = data.dataPoints;
+    document.getElementById('modelAccuracy').textContent = data.modelAccuracy + '%';
+}
+
+function updateMainChart(data) {
+    const chartType = document.getElementById('chartType').value;
+    
+    analyticsChart.config.type = chartType;
+    analyticsChart.data.labels = data.labels;
+    analyticsChart.data.datasets[0].data = data.data;
+    analyticsChart.update();
+}
+
+function updateInsights(data) {
+    const insights = [
+        {
+            title: 'Peak Traffic Hours',
+            content: `Traffic peaks at ${data.peakHours}:00 with ${data.avgCongestion}% average congestion`,
+            icon: 'fas fa-clock',
+            color: 'primary'
+        },
+        {
+            title: 'Model Performance',
+            content: `Prediction accuracy is ${data.modelAccuracy}% based on recent data`,
+            icon: 'fas fa-bullseye',
+            color: 'success'
+        },
+        {
+            title: 'Data Quality',
+            content: `Analyzed ${data.dataPoints} data points with high confidence`,
+            icon: 'fas fa-database',
+            color: 'info'
+        },
+        {
+            title: 'Recommendations',
+            content: 'Consider implementing dynamic signal timing during peak hours',
+            icon: 'fas fa-lightbulb',
+            color: 'warning'
+        }
+    ];
+    
+    const container = document.getElementById('insightsContainer');
+    container.innerHTML = '';
+    
+    insights.forEach(insight => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 mb-3';
+        col.innerHTML = `
+            <div class="card border-${insight.color}">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="${insight.icon} fa-2x text-${insight.color} me-3"></i>
+                        <div>
+                            <h6 class="card-title">${insight.title}</h6>
+                            <p class="card-text mb-0">${insight.content}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(col);
+    });
+}
+
+function updateAnalytics() {
+    loadAnalytics();
+}
+
+function refreshAnalytics() {
+    loadAnalytics();
+}
+
+function exportAnalytics() {
+    // Implement analytics export functionality
+    alert('Export functionality will be implemented');
+}
+</script>
+{% endblock %}

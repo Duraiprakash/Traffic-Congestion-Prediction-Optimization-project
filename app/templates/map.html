@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Traffic Map - Traffic Congestion Prediction{% endblock %}
+
+{% block extra_css %}
+<style>
+    #map { height: 600px; }
+    .map-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .traffic-legend {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-map me-2"></i>Traffic Heatmap
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="refreshMap()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="toggleHeatmap()">
+                    <i class="fas fa-fire me-1"></i>Toggle Heatmap
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div id="map"></div>
+                <div class="map-controls">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showPredictions" checked>
+                        <label class="form-check-label" for="showPredictions">
+                            Show Predictions
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showRealTime" checked>
+                        <label class="form-check-label" for="showRealTime">
+                            Real-time Data
+                        </label>
+                    </div>
+                </div>
+                <div class="traffic-legend">
+                    <h6>Traffic Legend</h6>
+                    <div class="d-flex align-items-center mb-1">
+                        <div class="bg-success rounded me-2" style="width: 20px; height: 15px;"></div>
+                        <small>Low Congestion</small>
+                    </div>
+                    <div class="d-flex align-items-center mb-1">
+                        <div class="bg-warning rounded me-2" style="width: 20px; height: 15px;"></div>
+                        <small>Medium Congestion</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="bg-danger rounded me-2" style="width: 20px; height: 15px;"></div>
+                        <small>High Congestion</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Traffic Data Table -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>Traffic Locations
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="locationsTable">
+                        <thead>
+                            <tr>
+                                <th>Location ID</th>
+                                <th>Coordinates</th>
+                                <th>Vehicles</th>
+                                <th>Speed</th>
+                                <th>Congestion</th>
+                                <th>Last Update</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="locationsTableBody">
+                            <!-- Data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let map, heatmapLayer, trafficMarkers = [];
+
+// Initialize map
+document.addEventListener('DOMContentLoaded', function() {
+    initializeMap();
+    loadTrafficData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadTrafficData, 30000);
+});
+
+function initializeMap() {
+    // Initialize map centered on a default location (can be changed)
+    map = L.map('map').setView([28.6139, 77.2090], 10); // Delhi coordinates
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    // Initialize heatmap layer
+    heatmapLayer = L.layerGroup().addTo(map);
+}
+
+function loadTrafficData() {
+    fetch('/api/heatmap-data')
+        .then(response => response.json())
+        .then(data => {
+            updateMapWithData(data.heatmap_data);
+            updateLocationsTable(data.heatmap_data);
+        })
+        .catch(error => {
+            console.error('Error loading traffic data:', error);
+        });
+}
+
+function updateMapWithData(heatmapData) {
+    // Clear existing markers
+    heatmapLayer.clearLayers();
+    trafficMarkers = [];
+    
+    // Add markers for each traffic location
+    heatmapData.forEach(data => {
+        const marker = L.circleMarker([data.lat, data.lng], {
+            radius: Math.max(5, data.vehicle_count / 2),
+            fillColor: getCongestionColor(data.congestion_level),
+            color: '#000',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+        }).addTo(heatmapLayer);
+        
+        // Add popup with traffic information
+        marker.bindPopup(`
+            <div>
+                <h6>${data.location_id}</h6>
+                <p><strong>Vehicles:</strong> ${data.vehicle_count}</p>
+                <p><strong>Congestion:</strong> <span class="badge bg-${getCongestionBootstrapColor(data.congestion_level)}">${data.congestion_level}</span></p>
+                <p><strong>Intensity:</strong> ${(data.intensity * 100).toFixed(1)}%</p>
+            </div>
+        `);
+        
+        trafficMarkers.push(marker);
+    });
+    
+    // Fit map to show all markers
+    if (trafficMarkers.length > 0) {
+        const group = new L.featureGroup(trafficMarkers);
+        map.fitBounds(group.getBounds().pad(0.1));
+    }
+}
+
+function updateLocationsTable(heatmapData) {
+    const tbody = document.getElementById('locationsTableBody');
+    tbody.innerHTML = '';
+    
+    heatmapData.forEach(data => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${data.location_id}</td>
+            <td>${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}</td>
+            <td>${data.vehicle_count}</td>
+            <td>${(data.intensity * 100).toFixed(1)}%</td>
+            <td><span class="badge bg-${getCongestionBootstrapColor(data.congestion_level)}">${data.congestion_level}</span></td>
+            <td>${new Date().toLocaleTimeString()}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="centerOnLocation(${data.lat}, ${data.lng})">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getCongestionColor(level) {
+    switch(level) {
+        case 'low': return '#28a745';
+        case 'medium': return '#ffc107';
+        case 'high': return '#dc3545';
+        default: return '#6c757d';
+    }
+}
+
+function getCongestionBootstrapColor(level) {
+    switch(level) {
+        case 'low': return 'success';
+        case 'medium': return 'warning';
+        case 'high': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function centerOnLocation(lat, lng) {
+    map.setView([lat, lng], 15);
+}
+
+function refreshMap() {
+    loadTrafficData();
+}
+
+function toggleHeatmap() {
+    // Toggle heatmap visualization
+    if (heatmapLayer.hasLayer()) {
+        map.removeLayer(heatmapLayer);
+    } else {
+        map.addLayer(heatmapLayer);
+    }
+}
+
+// Event listeners for checkboxes
+document.getElementById('showPredictions').addEventListener('change', function() {
+    // Toggle prediction markers
+    console.log('Show predictions:', this.checked);
+});
+
+document.getElementById('showRealTime').addEventListener('change', function() {
+    // Toggle real-time updates
+    if (this.checked) {
+        setInterval(loadTrafficData, 30000);
+    } else {
+        clearInterval();
+    }
+});
+</script>
+{% endblock %}

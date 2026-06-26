@@ -1,0 +1,1 @@
+{ version:0.2.0,configurations:[{name:Run app.py,type:python,request:launch,program:\\app.py,console:integratedTerminal,args:[--debug,--host,0.0.0.0,--port,5000],envFile:\\.env}]}
